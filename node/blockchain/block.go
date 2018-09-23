@@ -12,6 +12,7 @@ type Block struct {
 	Timestamp    int64
 	Transactions []Transaction
 	Nonce        int64
+	hashCache    string
 }
 
 func (b Block) Hash() string {

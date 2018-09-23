@@ -11,6 +11,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"go-simple-blockchain/node/blockchain"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -27,13 +28,6 @@ var keys struct {
 	publicKey  string
 }
 
-type Transaction struct {
-	Owner     string
-	Timestamp int64
-	Data      string
-	Sign      string
-}
-
 func header() {
 	fmt.Println("###############################")
 	fmt.Println("# Go-simple-blockchain Client #")
@@ -44,6 +38,21 @@ func header() {
 		fmt.Println(keys.publicKey)
 		fmt.Println()
 	}
+}
+
+func generateKeys() (*ecdsa.PrivateKey, string, error) {
+	privateKey, err := ecdsa.GenerateKey(elliptic.P224(), rand.Reader)
+	if err != nil {
+		return &ecdsa.PrivateKey{}, "", err
+	}
+	s, err := x509.MarshalECPrivateKey(privateKey)
+	if err != nil {
+		return &ecdsa.PrivateKey{}, "", err
+	}
+	ioutil.WriteFile("private_key", s, os.ModePerm)
+	p := privateKey.PublicKey.X.Text(16) + "+" + privateKey.PublicKey.Y.Text(16)
+	publicKey := base64.StdEncoding.EncodeToString([]byte(p))
+	return privateKey, publicKey, nil
 }
 
 func clear() {
@@ -58,7 +67,6 @@ func main() {
 		keys.privateKey, err = x509.ParseECPrivateKey(file)
 		if err == nil {
 			keys.publicKey = base64.StdEncoding.EncodeToString([]byte(keys.privateKey.PublicKey.X.Text(16) + "+" + keys.privateKey.PublicKey.Y.Text(16)))
-			fmt.Println(keys.privateKey.PublicKey.X.Text(16) + "+" + keys.privateKey.PublicKey.Y.Text(16))
 		}
 	}
 	clear()
@@ -76,11 +84,11 @@ func main() {
 
 		switch action {
 		case 1:
-			keys.privateKey, _ = ecdsa.GenerateKey(elliptic.P224(), rand.Reader)
-			s, _ := x509.MarshalECPrivateKey(keys.privateKey)
-			ioutil.WriteFile("private_key", s, os.ModePerm)
-			p := keys.privateKey.PublicKey.X.Text(16) + "+" + keys.privateKey.PublicKey.Y.Text(16)
-			keys.publicKey = base64.StdEncoding.EncodeToString([]byte(p))
+			keys.privateKey, keys.publicKey, err = generateKeys()
+			if err != nil {
+				fmt.Println(err.Error())
+				return
+			}
 			clear()
 			header()
 		case 2:
@@ -94,7 +102,7 @@ func main() {
 			str, _ := bufio.NewReader(os.Stdin).ReadString('\n')
 			str = strings.TrimRight(str, "\n")
 
-			t := Transaction{keys.publicKey, time.Now().Unix(), str, ""}
+			t := blockchain.Transaction{Owner: keys.publicKey, Timestamp: time.Now().Unix(), Data: str}
 			hash := sha256.Sum256([]byte(t.Owner + strconv.FormatInt(t.Timestamp, 10) + t.Data))
 			r, s, _ := ecdsa.Sign(rand.Reader, keys.privateKey, hash[:])
 
@@ -104,8 +112,6 @@ func main() {
 
 			jsonStr, _ := json.Marshal(t)
 			req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonStr))
-			req.Header.Set("Content-Type", "application/json")
-
 			client := &http.Client{}
 			client.Do(req)
 

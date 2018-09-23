@@ -16,10 +16,14 @@ type Transaction struct {
 	Timestamp int64
 	Data      string
 	Sign      string
+	hashCache string
 }
 
-func (t Transaction) getHash() string {
-	return fmt.Sprintf("%x", sha256.Sum256([]byte(t.Owner+t.Data+t.Sign)))
+func (t *Transaction) getHash() string {
+	if t.hashCache == "" {
+		t.hashCache = fmt.Sprintf("%x", sha256.Sum256([]byte(t.Owner+t.Data+t.Sign)))
+	}
+	return t.hashCache
 }
 
 func (t Transaction) Verify() bool {
@@ -28,29 +32,30 @@ func (t Transaction) Verify() bool {
 	if err != nil {
 		return false
 	}
-
-	pub_arr := strings.Split(string(owner), "+")
-	if len(pub_arr) != 2 {
+	pubArr := strings.Split(string(owner), "+")
+	if len(pubArr) != 2 {
 		return false
 	}
-	X, _ := new(big.Int).SetString(pub_arr[0], 16)
-	Y, _ := new(big.Int).SetString(pub_arr[1], 16)
-	public_key := ecdsa.PublicKey{elliptic.P224(), X, Y}
+	X, ok1 := new(big.Int).SetString(pubArr[0], 16)
+	Y, ok2 := new(big.Int).SetString(pubArr[1], 16)
+	if !ok1 || !ok2 {
+		return false
+	}
+	publicKey := ecdsa.PublicKey{Curve: elliptic.P224(), X: X, Y: Y}
 	if err != nil {
 		return false
 	}
 
 	sign, err := base64.StdEncoding.DecodeString(t.Sign)
-
-	arr := strings.Split(string(sign), "_")
-
-	r, s := new(big.Int), new(big.Int)
-	r, _ = r.SetString(arr[0], 16)
-	s, _ = s.SetString(arr[1], 16)
-
 	if err != nil {
 		return false
 	}
-
-	return ecdsa.Verify(&public_key, hash[:], r, s)
+	arr := strings.Split(string(sign), "_")
+	r, s := new(big.Int), new(big.Int)
+	r, ok1 = r.SetString(arr[0], 16)
+	s, ok2 = s.SetString(arr[1], 16)
+	if !ok1 || !ok2 {
+		return false
+	}
+	return ecdsa.Verify(&publicKey, hash[:], r, s)
 }
