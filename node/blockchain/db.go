@@ -2,31 +2,24 @@ package blockchain
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"os"
-	"sort"
 )
 
 var chainPath string
+
+var lastBlock = Block{Id: -1}
 
 func init() {
 	chainPath = "node/blockchain/blocks/"
 }
 
 func GetLast() Block {
-	var res Block
-
-	files, err := ioutil.ReadDir(chainPath)
-	if err != nil {
-		fmt.Println(err.Error())
+	if lastBlock.Id == -1 {
+		files, _ := ioutil.ReadDir(chainPath)
+		lastBlock = GetAll().Sort()[len(files)-1]
 	}
-	sort.Slice(files, func(i, j int) bool {
-		return files[i].ModTime().Unix() < files[j].ModTime().Unix()
-	})
-	file, _ := ioutil.ReadFile(chainPath + files[len(files)-1].Name())
-	json.Unmarshal(file, &res)
-	return res
+	return lastBlock
 }
 
 func GetAll() BlockChain {
@@ -39,29 +32,31 @@ func GetAll() BlockChain {
 	return res
 }
 
-func GetAfterTime(timestamp int64) BlockChain {
-	files, _ := ioutil.ReadDir(chainPath)
-	sort.Slice(files, func(i, j int) bool {
-		return files[i].ModTime().Unix() > files[j].ModTime().Unix()
-	})
-	var res BlockChain
-	for i := range files {
-		file, _ := ioutil.ReadFile(chainPath + files[i].Name())
-		block := &Block{}
-		json.Unmarshal(file, &block)
-		if block.Timestamp < timestamp {
-			break
+func GetSinceTime(timestamp int64) BlockChain {
+	var res []Block = GetAll().Sort()
+	for i := range res {
+		if res[i].Timestamp >= timestamp {
+			return res[i:]
 		}
-		res = append(res, *block)
 	}
 	return res
 }
 
-func RemoveBlock(hash string) error {
-	return os.Remove(chainPath + hash + ".json")
+func RemoveBlock(hash string) ([]Transaction, error) {
+	file, err := ioutil.ReadFile(chainPath + hash + ".json")
+	if err != nil {
+		return nil, nil
+	}
+	block := &Block{}
+	json.Unmarshal(file, &block)
+	return block.Transactions, os.Remove(chainPath + hash + ".json")
 }
 
 func PushBlock(b Block) {
-	msg, _ := json.Marshal(b)
+	msg, err := json.Marshal(b)
+	if err != nil {
+		panic(err.Error())
+	}
 	ioutil.WriteFile(chainPath+b.Hash()+".json", msg, os.ModePerm)
+	lastBlock = b
 }

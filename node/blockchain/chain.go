@@ -14,6 +14,7 @@ func (chain BlockChain) Sort() BlockChain {
 }
 
 func (chain BlockChain) Check() bool {
+	chain = chain.Sort()
 	for i := 0; i < len(chain)-1; i++ {
 		if chain[i+1].PrevBlock != chain[i].Hash() {
 			return false
