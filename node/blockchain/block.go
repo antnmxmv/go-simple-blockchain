@@ -33,7 +33,7 @@ func (b *Block) addTransaction(t Transaction) {
 
 func (b Block) Check() bool {
 	hash := b.Hash()
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 5; i++ {
 		if hash[i] != '0' {
 			return false
 		}

@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/x509"
+	"encoding/asn1"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -49,10 +50,19 @@ func generateKeys() (*ecdsa.PrivateKey, string, error) {
 	if err != nil {
 		return &ecdsa.PrivateKey{}, "", err
 	}
-	ioutil.WriteFile("private_key", s, os.ModePerm)
-	p := privateKey.PublicKey.X.Text(16) + "+" + privateKey.PublicKey.Y.Text(16)
-	publicKey := base64.StdEncoding.EncodeToString([]byte(p))
+	ioutil.WriteFile("private_key", []byte(base64.StdEncoding.EncodeToString(s)), os.ModePerm)
+	marshaledKey, _ := x509.MarshalPKIXPublicKey(privateKey.Public())
+	publicKey := base64.StdEncoding.EncodeToString(marshaledKey)
 	return privateKey, publicKey, nil
+}
+
+func sign(msg string) blockchain.Transaction {
+	t := blockchain.Transaction{Owner: keys.publicKey, Timestamp: time.Now().Unix(), Data: msg}
+	hash := sha256.Sum256([]byte(t.Owner + strconv.FormatInt(t.Timestamp, 10) + t.Data))
+	r, s, _ := ecdsa.Sign(rand.Reader, keys.privateKey, hash[:])
+	as, _ := asn1.Marshal([][]byte{r.Bytes(), s.Bytes()})
+	t.Sign = base64.StdEncoding.EncodeToString(as)
+	return t
 }
 
 func clear() {
@@ -64,9 +74,11 @@ func clear() {
 func main() {
 	file, err := ioutil.ReadFile("private_key")
 	if err == nil {
-		keys.privateKey, err = x509.ParseECPrivateKey(file)
+		key, err := base64.StdEncoding.DecodeString(string(file))
+		keys.privateKey, err = x509.ParseECPrivateKey(key)
 		if err == nil {
-			keys.publicKey = base64.StdEncoding.EncodeToString([]byte(keys.privateKey.PublicKey.X.Text(16) + "+" + keys.privateKey.PublicKey.Y.Text(16)))
+			marshaledKey, _ := x509.MarshalPKIXPublicKey(keys.privateKey.Public())
+			keys.publicKey = base64.StdEncoding.EncodeToString(marshaledKey)
 		}
 	}
 	clear()
@@ -102,11 +114,7 @@ func main() {
 			str, _ := bufio.NewReader(os.Stdin).ReadString('\n')
 			str = strings.TrimRight(str, "\n")
 
-			t := blockchain.Transaction{Owner: keys.publicKey, Timestamp: time.Now().Unix(), Data: str}
-			hash := sha256.Sum256([]byte(t.Owner + strconv.FormatInt(t.Timestamp, 10) + t.Data))
-			r, s, _ := ecdsa.Sign(rand.Reader, keys.privateKey, hash[:])
-
-			t.Sign = base64.StdEncoding.EncodeToString([]byte(r.Text(16) + "_" + s.Text(16)))
+			t := sign(str)
 
 			url := "http://localhost:1488/tran/"
 
@@ -119,6 +127,8 @@ func main() {
 			bufio.NewReader(os.Stdin).ReadString('\n')
 		case 3:
 			return
+		default:
+			header()
 		}
 	}
 

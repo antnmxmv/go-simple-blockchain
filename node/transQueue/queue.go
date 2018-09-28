@@ -21,7 +21,7 @@ func SetCurrent(b *blockchain.Block) {
 func init() {
 	trans.queue = make([]blockchain.Transaction, 0)
 	trans.set = make(map[string]bool)
-	trans.currentBlock = &blockchain.Block{}
+	trans.currentBlock = &blockchain.Block{Id: -1}
 }
 
 func Lock() {

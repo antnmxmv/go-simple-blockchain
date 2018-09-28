@@ -4,11 +4,12 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/sha256"
+	"crypto/x509"
+	"encoding/asn1"
 	"encoding/base64"
 	"fmt"
 	"math/big"
 	"strconv"
-	"strings"
 )
 
 type Transaction struct {
@@ -32,16 +33,12 @@ func (t Transaction) Verify() bool {
 	if err != nil {
 		return false
 	}
-	pubArr := strings.Split(string(owner), "+")
-	if len(pubArr) != 2 {
+	pbKey, err := x509.ParsePKIXPublicKey(owner)
+	if err != nil {
+		fmt.Println(err)
 		return false
 	}
-	X, ok1 := new(big.Int).SetString(pubArr[0], 16)
-	Y, ok2 := new(big.Int).SetString(pubArr[1], 16)
-	if !ok1 || !ok2 {
-		return false
-	}
-	publicKey := ecdsa.PublicKey{Curve: elliptic.P224(), X: X, Y: Y}
+	publicKey := ecdsa.PublicKey{Curve: elliptic.P224(), X: pbKey.(*ecdsa.PublicKey).X, Y: pbKey.(*ecdsa.PublicKey).Y}
 	if err != nil {
 		return false
 	}
@@ -50,12 +47,11 @@ func (t Transaction) Verify() bool {
 	if err != nil {
 		return false
 	}
-	arr := strings.Split(string(sign), "_")
-	r, s := new(big.Int), new(big.Int)
-	r, ok1 = r.SetString(arr[0], 16)
-	s, ok2 = s.SetString(arr[1], 16)
-	if !ok1 || !ok2 {
+	var rs [][]byte
+	_, err = asn1.Unmarshal(sign, &rs)
+	if err != nil {
 		return false
 	}
+	r, s := big.NewInt(1).SetBytes(rs[0]), big.NewInt(1).SetBytes(rs[1])
 	return ecdsa.Verify(&publicKey, hash[:], r, s)
 }

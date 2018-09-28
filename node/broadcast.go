@@ -43,8 +43,9 @@ func notifyNodes(msg interface{}) {
 func miner(stopSignal *bool) {
 	transQueue.Lock()
 	b := blockchain.Block{PrevBlock: blockchain.GetLast().Hash(), Id: blockchain.GetLast().Id + 1, Timestamp: time.Now().Unix(), Nonce: 1}
-	if *stopSignal != true {
+	if *stopSignal == true {
 		transQueue.Unlock()
+		*stopSignal = false
 		return
 	}
 	for i := 0; i < 3; i++ {
@@ -66,11 +67,14 @@ func miner(stopSignal *bool) {
 		b.Nonce++
 	}
 	if b.Check() {
-		fmt.Println("BLOCK IS READY. IT'S HASH - " + b.Hash())
+		color.New(color.BgGreen).Print("                     \n")
+		color.New(color.BgGreen).Print(" I MADE NEW BLOCK!!! \n")
+		color.New(color.BgGreen).Print("                     \n")
+		fmt.Println()
 		transQueue.Lock()
-		transQueue.SetCurrent(&blockchain.Block{})
+		transQueue.SetCurrent(&blockchain.Block{Id: -1})
 		transQueue.Unlock()
-		jsonStr, _ := json.Marshal(append(blockchain.GetAll().Sort(), b))
+		jsonStr, _ := json.Marshal(append(blockchain.GetSinceTime(time.Now().Unix()-(int64(time.Hour.Seconds())*24)).Sort(), b))
 		req, _ := http.NewRequest("POST", "http://localhost:"+port+"/blocks/", bytes.NewBuffer(jsonStr))
 		client := &http.Client{}
 		client.Timeout = 0
@@ -103,7 +107,7 @@ func main() {
 			fmt.Println("ERROR! [port] must be int between 1000 and 9999!")
 			return
 		}
-		if !(n > 999 && n < 10000) {
+		if !(n >= 1024 && n <= 65535) {
 			fmt.Println(args[0] + " [port]")
 			fmt.Println("ERROR! [port] must be int between 1000 and 9999!")
 			return
@@ -128,8 +132,8 @@ func main() {
 			if newChain.Check() {
 				go notifyNodes(newChain)
 				stopSignal = true
-				if len((*transQueue.CurrentBlock).Transactions) != 0 {
-					for stopSignal {
+				if (*transQueue.CurrentBlock).Id != -1 {
+					for !stopSignal {
 						// wait until miner goroutine return
 					}
 				}
@@ -140,7 +144,7 @@ func main() {
 				for i := len(todayChain); i < len(newChain); i++ {
 					blockchain.PushBlock(newChain[i])
 				}
-				fmt.Println("GOT NEW PART OF CHAIN!")
+				color.New(color.BgYellow).Println("GOT NEW PART OF CHAIN!")
 				for j := range todayChain {
 					for _, i := range todayChain[j].Transactions {
 						transQueue.Lock()
@@ -155,7 +159,7 @@ func main() {
 						transQueue.Unlock()
 					}
 				}
-				if transQueue.Size() >= 3 && len((*transQueue.CurrentBlock).Transactions) > 0 {
+				if transQueue.Size() >= 3 && (*transQueue.CurrentBlock).Id == -1 {
 					go miner(&stopSignal)
 				}
 			}
@@ -170,11 +174,11 @@ func main() {
 		if t.Verify() {
 			transQueue.Lock()
 			if transQueue.Push(t) {
-				color.New(color.BgGreen).Println("New transaction!")
+				color.New(color.BgYellow).Println("New transaction!")
 				go notifyNodes(t)
 			}
 			transQueue.Unlock()
-			if transQueue.Size() >= 3 && len((*transQueue.CurrentBlock).Transactions) == 0 {
+			if transQueue.Size() >= 3 && (*transQueue.CurrentBlock).Id == -1 {
 				go miner(&stopSignal)
 			}
 		}
