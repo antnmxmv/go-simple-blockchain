@@ -15,6 +15,9 @@ type Block struct {
 	hashCache    string
 }
 
+/*
+ Block stores whole transactions, but hashes only hashes of all transactions
+*/
 func (b Block) Hash() string {
 	data := ""
 	for _, t := range b.Transactions {
@@ -23,12 +26,6 @@ func (b Block) Hash() string {
 	data = b.PrevBlock + strconv.Itoa(b.Id) + strconv.FormatInt(b.Timestamp, 10) + data + strconv.FormatInt(b.Nonce, 10)
 	hash := fmt.Sprintf("%x", sha256.Sum256([]byte(data)))
 	return hash
-}
-
-func (b *Block) addTransaction(t Transaction) {
-	if t.Verify() {
-		b.Transactions = append(b.Transactions, t)
-	}
 }
 
 func (b Block) Check() bool {

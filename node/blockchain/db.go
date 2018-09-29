@@ -8,6 +8,11 @@ import (
 
 var chainPath string
 
+/*
+ File of functions, which works with database.
+ For this simple blockchain, I use separate json files for each block
+*/
+
 var lastBlock = Block{Id: -1}
 
 func init() {

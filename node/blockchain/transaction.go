@@ -20,6 +20,9 @@ type Transaction struct {
 	hashCache string
 }
 
+/*
+ Need for hashing block
+*/
 func (t *Transaction) getHash() string {
 	if t.hashCache == "" {
 		t.hashCache = fmt.Sprintf("%x", sha256.Sum256([]byte(t.Owner+t.Data+t.Sign)))

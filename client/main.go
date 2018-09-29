@@ -22,7 +22,7 @@ import (
 	"time"
 )
 
-const version = "0.1"
+const version = "0.9"
 
 var keys struct {
 	privateKey *ecdsa.PrivateKey
@@ -41,6 +41,9 @@ func header() {
 	}
 }
 
+/*
+ Generates ecdsa keys, marshals and encodes in base64
+*/
 func generateKeys() (*ecdsa.PrivateKey, string, error) {
 	privateKey, err := ecdsa.GenerateKey(elliptic.P224(), rand.Reader)
 	if err != nil {
@@ -56,15 +59,22 @@ func generateKeys() (*ecdsa.PrivateKey, string, error) {
 	return privateKey, publicKey, nil
 }
 
+/*
+ Returns transaction with current timestamp and sign
+*/
 func sign(msg string) blockchain.Transaction {
 	t := blockchain.Transaction{Owner: keys.publicKey, Timestamp: time.Now().Unix(), Data: msg}
 	hash := sha256.Sum256([]byte(t.Owner + strconv.FormatInt(t.Timestamp, 10) + t.Data))
-	r, s, _ := ecdsa.Sign(rand.Reader, keys.privateKey, hash[:])
-	as, _ := asn1.Marshal([][]byte{r.Bytes(), s.Bytes()})
-	t.Sign = base64.StdEncoding.EncodeToString(as)
+	r, s, err := ecdsa.Sign(rand.Reader, keys.privateKey, hash[:])
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	asn, _ := asn1.Marshal([][]byte{r.Bytes(), s.Bytes()})
+	t.Sign = base64.StdEncoding.EncodeToString(asn)
 	return t
 }
 
+// Clear bash command
 func clear() {
 	cmd := exec.Command("clear")
 	cmd.Stdout = os.Stdout
@@ -86,13 +96,12 @@ func main() {
 	for {
 
 		fmt.Print("1. Generate new keys\n2. Make a transaction\n3. Exit\n\n")
-		str, _ := bufio.NewReader(os.Stdin).ReadString('\n')
-		action, err := strconv.Atoi(strings.TrimRight(str, "\n"))
-
+		str, err := bufio.NewReader(os.Stdin).ReadString('\n')
 		if err != nil {
-			clear()
-			continue
+			fmt.Println(err.Error())
+			return
 		}
+		action, _ := strconv.Atoi(strings.TrimRight(str, "\n"))
 
 		switch action {
 		case 1:
@@ -101,11 +110,7 @@ func main() {
 				fmt.Println(err.Error())
 				return
 			}
-			clear()
-			header()
 		case 2:
-			clear()
-			header()
 			if keys.publicKey == "" {
 				fmt.Print("You need to generate keys!\n\n")
 				break
@@ -115,6 +120,9 @@ func main() {
 			str = strings.TrimRight(str, "\n")
 
 			t := sign(str)
+
+			// Marshal and send to specified node address
+			// TODO: Another way to specify url
 
 			url := "http://localhost:1488/tran/"
 
@@ -130,6 +138,8 @@ func main() {
 		default:
 			header()
 		}
+		clear()
+		header()
 	}
 
 }

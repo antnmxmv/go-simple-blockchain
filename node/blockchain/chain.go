@@ -1,11 +1,12 @@
 package blockchain
 
-import (
-	"sort"
-)
+import "sort"
 
 type BlockChain []Block
 
+/*
+ Returns chan sorted by id
+*/
 func (chain BlockChain) Sort() BlockChain {
 	sort.Slice(chain, func(i, j int) bool {
 		return chain[i].Id < chain[j].Id
