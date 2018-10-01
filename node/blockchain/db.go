@@ -6,8 +6,6 @@ import (
 	"os"
 )
 
-var chainPath string
-
 /*
  File of functions, which works with database.
  For this simple blockchain, I use separate json files for each block
@@ -15,9 +13,7 @@ var chainPath string
 
 var lastBlock = Block{Id: -1}
 
-func init() {
-	chainPath = "node/blockchain/blocks/"
-}
+var chainPath = "node/blockchain/blocks/"
 
 func GetLast() Block {
 	if lastBlock.Id == -1 {
@@ -50,7 +46,7 @@ func GetSinceTime(timestamp int64) BlockChain {
 func RemoveBlock(hash string) ([]Transaction, error) {
 	file, err := ioutil.ReadFile(chainPath + hash + ".json")
 	if err != nil {
-		return nil, nil
+		return nil, err
 	}
 	block := &Block{}
 	json.Unmarshal(file, &block)
@@ -64,4 +60,14 @@ func PushBlock(b Block) {
 	}
 	ioutil.WriteFile(chainPath+b.Hash()+".json", msg, os.ModePerm)
 	lastBlock = b
+}
+
+func GetByHash(hash string) (Block, bool) {
+	res := &Block{}
+	file, err := ioutil.ReadFile(chainPath + hash + ".json")
+	if err != nil {
+		return *res, false
+	}
+	json.Unmarshal(file, &res)
+	return *res, true
 }

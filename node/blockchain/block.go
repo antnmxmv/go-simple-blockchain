@@ -18,10 +18,15 @@ type Block struct {
 /*
  Block stores whole transactions, but hashes only hashes of all transactions
 */
-func (b Block) Hash() string {
+func (b *Block) Hash() string {
 	data := ""
-	for _, t := range b.Transactions {
-		data += t.getHash()
+	if b.hashCache == "" {
+		for _, t := range b.Transactions {
+			data += t.getHash()
+		}
+		b.hashCache = data
+	} else {
+		data = b.hashCache
 	}
 	data = b.PrevBlock + strconv.Itoa(b.Id) + strconv.FormatInt(b.Timestamp, 10) + data + strconv.FormatInt(b.Nonce, 10)
 	hash := fmt.Sprintf("%x", sha256.Sum256([]byte(data)))
@@ -36,4 +41,8 @@ func (b Block) Check() bool {
 		}
 	}
 	return true
+}
+
+func (a Block) Equal(b Block) bool {
+	return b.Hash() == a.Hash()
 }
