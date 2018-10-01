@@ -24,6 +24,8 @@ var port string
 
 var urls []string
 
+var stopSignal = false
+
 /*
  Sends object to nodes in url list
  msg - must be BlockChain or Transaction object
@@ -77,9 +79,9 @@ func miner(stopSignal *bool) {
 		b.Nonce++
 	}
 	if b.Check() {
-		color.New(color.BgGreen).Print("                     \n")
-		color.New(color.BgGreen).Print(" I MADE NEW BLOCK!!! \n")
-		color.New(color.BgGreen).Print("                     \n")
+		color.New(color.BgGreen).Println("                     ")
+		color.New(color.BgGreen).Println(" I MADE NEW BLOCK!!! ")
+		color.New(color.BgGreen).Println("                     ")
 		fmt.Println()
 		transQueue.Lock()
 		transQueue.SetCurrent(&blockchain.Block{Id: -1})
@@ -94,26 +96,29 @@ func miner(stopSignal *bool) {
 	}
 }
 
+func stopMiner() {
+	stopSignal = true
+	if (*transQueue.CurrentBlock).Id != -1 {
+		for !stopSignal {
+			// wait until miner goroutine return
+		}
+	}
+}
+
 func main() {
 	// Getting and checking [port] argument
 	args := os.Args
 	if len(args) != 1 {
 		n, err := strconv.Atoi(args[1])
 		if err != nil {
-			fmt.Println("Error 1: Port is not an integer.")
-			fmt.Println(args[0] + " [port]")
-			return
+			panic(getErrorDesc(1))
 		}
 		if !(n >= 1024 && n <= 65535) {
-			fmt.Println("Error 2: Port is not in right range. \n[port] must be int between 1000 and 9999.")
-			fmt.Println(args[0] + " [port]")
-			return
+			panic(getErrorDesc(2))
 		}
 		port = args[1]
 	} else {
-		fmt.Println("Error 3: Port is not specified.")
-		fmt.Println(args[0] + " [port]")
-		return
+		panic(getErrorDesc(3))
 	}
 	// Retrieving url list from file
 	file, err := os.Open("node/urls")
@@ -130,13 +135,23 @@ func main() {
 	cmd.Stdout = os.Stdout
 	cmd.Run()
 
-	var stopSignal = false
-
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
 
 	router.GET("/blocks/", func(c *gin.Context) {
 		c.JSON(200, blockchain.GetAll().Sort())
+	})
+
+	router.GET("/blocks/:hash/", func(c *gin.Context) {
+		hash, ok := c.Params.Get("hash")
+		if !ok {
+			c.AbortWithStatus(400)
+		}
+		if block, ok := blockchain.GetByHash(hash); ok {
+			c.JSON(200, block)
+		} else {
+			c.JSON(404, block)
+		}
 	})
 
 	// Getting new part of blockchain
@@ -150,16 +165,10 @@ func main() {
 		todayChain := blockchain.GetSinceTime(newChain[0].Timestamp).Sort()
 		if len(newChain) > len(todayChain) {
 			if newChain.Check() {
-
 				// If we got right chain with length more than ours
 				go notifyNodes(newChain)
-				// Stop miner
-				stopSignal = true
-				if (*transQueue.CurrentBlock).Id != -1 {
-					for !stopSignal {
-						// wait until miner goroutine return
-					}
-				}
+
+				stopMiner()
 				// Removing part from local and pushing new part
 				for i := 0; i < len(todayChain); i++ {
 					blockchain.RemoveBlock(todayChain[i].Hash())
@@ -189,6 +198,8 @@ func main() {
 				if transQueue.Size() >= TransactionsNumber && (*transQueue.CurrentBlock).Id == -1 {
 					go miner(&stopSignal)
 				}
+			} else {
+				color.New(color.BgRed).Println(c.ClientIP() + " has tried to send wrong chain.")
 			}
 		}
 	})
