@@ -18,7 +18,7 @@ import (
 )
 
 // number of transactions for each block
-const TransactionsNumber = 3
+const MaxTransactionsNumber = 10
 
 var port string
 
@@ -54,13 +54,14 @@ func notifyNodes(msg interface{}) {
 */
 func miner(stopSignal *bool) {
 	transQueue.Lock()
-	b := blockchain.Block{PrevBlock: blockchain.GetLast().Hash(), Id: blockchain.GetLast().Id + 1, Timestamp: time.Now().Unix(), Nonce: 1}
+	lastBlock := blockchain.GetLast()
+	b := blockchain.Block{PrevBlock: lastBlock.Hash(), Id: lastBlock.Id + 1, Timestamp: time.Now().Unix(), Nonce: 1}
 	if *stopSignal == true {
 		transQueue.Unlock()
 		*stopSignal = false
 		return
 	}
-	for i := 0; i < TransactionsNumber; i++ {
+	for i := 0; i < MaxTransactionsNumber && i < transQueue.Size(); i++ {
 		b.Transactions = append(b.Transactions, transQueue.Pop())
 	}
 	transQueue.SetCurrent(&b)
@@ -68,7 +69,7 @@ func miner(stopSignal *bool) {
 	for !b.Check() {
 		if *stopSignal {
 			transQueue.Lock()
-			transQueue.SetCurrent(&blockchain.Block{})
+			transQueue.SetCurrent(&blockchain.Block{Id: -1})
 			for _, i := range b.Transactions {
 				transQueue.Push(i)
 			}
@@ -147,6 +148,10 @@ func main() {
 		if !ok {
 			c.AbortWithStatus(400)
 		}
+		if hash == "last" {
+			c.JSON(200, blockchain.GetLast())
+			return
+		}
 		if block, ok := blockchain.GetByHash(hash); ok {
 			c.JSON(200, block)
 		} else {
@@ -195,7 +200,7 @@ func main() {
 					}
 				}
 				// If enough transactions returned back, start mining
-				if transQueue.Size() >= TransactionsNumber && (*transQueue.CurrentBlock).Id == -1 {
+				if transQueue.Size() != 0 && (*transQueue.CurrentBlock).Id == -1 {
 					go miner(&stopSignal)
 				}
 			} else {
@@ -217,7 +222,7 @@ func main() {
 				go notifyNodes(t)
 			}
 			transQueue.Unlock()
-			if transQueue.Size() >= TransactionsNumber && (*transQueue.CurrentBlock).Id == -1 {
+			if transQueue.Size() != 0 && (*transQueue.CurrentBlock).Id == -1 {
 				go miner(&stopSignal)
 			}
 		}
